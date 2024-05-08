@@ -258,7 +258,6 @@ class Text2MotionDatasetV2(data.Dataset):
         self.min_motion_length = min_motion_length
         self.max_text_len = max_text_len
         self.unit_length = unit_length
-
         data_dict = {}
         id_list = []
         with cs.open(split_file, "r") as f:
@@ -295,14 +294,17 @@ class Text2MotionDatasetV2(data.Dataset):
                     continue
                 text_data = []
                 flag = False
+                #print('text dir', text_dir, name)
                 with cs.open(pjoin(text_dir, name + ".txt")) as f:
                     for line in f.readlines():
                         text_dict = {}
                         line_split = line.strip().split("#")
                         caption = line_split[0]
                         tokens = line_split[1].split(" ")
+                        #print('cption', caption, tokens)
                         f_tag = float(line_split[2])
                         to_tag = float(line_split[3])
+                        #print('f tag', f_tag, to_tag)
                         f_tag = 0.0 if np.isnan(f_tag) else f_tag
                         to_tag = 0.0 if np.isnan(to_tag) else to_tag
 
@@ -353,7 +355,7 @@ class Text2MotionDatasetV2(data.Dataset):
                     # print(name)
             except:
                 pass
-
+        #print('==========>', new_name_list, length_list)
         name_list, length_list = zip(
             *sorted(zip(new_name_list, length_list), key=lambda x: x[1]))
 
