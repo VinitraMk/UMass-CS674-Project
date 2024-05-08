@@ -8,3 +8,5 @@
 /motionml
 /checkpoints
 /deps
+/**/__pycache__
+*.pyc
