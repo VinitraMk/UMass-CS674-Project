@@ -66,10 +66,8 @@ def get_collate_fn(name, phase="train"):
 
 # map config name to module&path
 dataset_module_map = {
-    "humanml3d": HumanML3DDataModule,
     "kit": KitDataModule,
     "humanact12": Humanact12DataModule,
-    "uestc": UestcDataModule,
 }
 motion_subdir = {"humanml3d": "new_joint_vecs", "kit": "new_joint_vecs"}
 
