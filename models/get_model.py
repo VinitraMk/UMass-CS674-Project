@@ -3,6 +3,7 @@ import importlib
 
 def get_model(cfg, datamodule, phase="train"):
     modeltype = cfg.model.model_type
+    print(cfg.model.model_type)
     if modeltype == "mld":
         return get_module(cfg, datamodule)
     else:
@@ -12,6 +13,6 @@ def get_model(cfg, datamodule, phase="train"):
 def get_module(cfg, datamodule):
     modeltype = cfg.model.model_type
     model_module = importlib.import_module(
-        f".{cfg.model.model_type}", package="models")
+        f".modeltype.{cfg.model.model_type}", package="models")
     Model = model_module.__getattribute__(f"{modeltype.upper()}")
     return Model(cfg=cfg, datamodule=datamodule)

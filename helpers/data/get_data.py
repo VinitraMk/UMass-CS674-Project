@@ -44,7 +44,7 @@ def get_mean_std(phase, cfg, dataset_name):
 
 def get_WordVectorizer(cfg, phase, dataset_name):
     if phase not in ["text_only"]:
-        if dataset_name.lower() in ["humanml3d", "kit"]:
+        if dataset_name.lower() in ["kit"]:
             return WordVectorizer(cfg.DATASET.WORD_VERTILIZER_PATH, "our_vab")
         else:
             raise ValueError("Only support WordVectorizer for HumanML3D")
@@ -53,9 +53,9 @@ def get_WordVectorizer(cfg, phase, dataset_name):
 
 
 def get_collate_fn(name, phase="train"):
-    if name.lower() in ["humanml3d", "kit"]:
+    if name.lower() in ["kit"]:
         return mld_collate
-    elif name.lower() in ["humanact12", 'uestc']:
+    elif name.lower() in ["humanact12"]:
         return a2m_collate
     # else:
     #     return all_collate

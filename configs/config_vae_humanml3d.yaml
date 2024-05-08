@@ -1,5 +1,5 @@
 NAME: 1222_PELearn_VAE_MEncDec49_MdiffEnc49_bs64_clip_uncond75_01 # Experiment name
-DEBUG: False # Debug mode
+DEBUG: True # Debug mode
 ACCELERATOR: 'gpu' # Devices optioncal: “cpu”, “gpu”, “tpu”, “ipu”, “hpu”, “mps, “auto”
 DEVICE: [0] # Index of gpus eg. [0] or [0,1,2,3]
 
@@ -41,7 +41,7 @@ TEST:
 
 # Datasets Configuration
 DATASET:
-  JOINT_TYPE: 'humanml3d' # join type
+  JOINT_TYPE: 'kit' # join type
 METRIC:
   TYPE: ['TemosMetric', 'TM2TMetrics']
 # Losses Configuration
@@ -59,7 +59,7 @@ LOSS:
 # Model Configuration
 model:
   vae: true # whether vae model
-  model_type: mld_vae # model type
+  model_type: mld # model type
   condition: 'text'
   latent_dim: [1, 256] # latent dimension
   ff_size: 1024 #
