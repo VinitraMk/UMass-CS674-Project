@@ -5,7 +5,7 @@ TEST:
 
 DATASET:
   SMPL_PATH: './deps/smpl'
-  TRANSFORM_PATH: './deps/transforms/'
+  TRANSFORM_PATH: './mld/transforms/'
   WORD_VERTILIZER_PATH: './deps/t2m/glove/'
   KIT:
     ROOT: './motionml' # KIT directory

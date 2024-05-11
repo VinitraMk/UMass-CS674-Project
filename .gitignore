@@ -10,3 +10,5 @@
 /deps
 /**/__pycache__
 *.pyc
+/experiments
+/results
