@@ -73,8 +73,8 @@ class GAN(BaseModel):
 
         # Don't train the motion encoder and decoder
         if self.stage == "gan":
-            #self.gan = basic_gan.CGAN(self.noise_dim, self.text_emb_dim , self.latent_dim[-1])  # text emb dim = 768
-            self.gan = style_gan.CGAN(self.noise_dim, self.text_emb_dim , self.latent_dim[-1])  # text emb dim = 768
+            self.gan = basic_gan.CGAN(self.noise_dim, self.text_emb_dim , self.latent_dim[-1])  # text emb dim = 768
+            #self.gan = style_gan.CGAN(self.noise_dim, self.text_emb_dim , self.latent_dim[-1])  # text emb dim = 768
             
             if self.vae_type in ["mld", "vposert","actor"]:
                 self.vae.training = False
@@ -578,7 +578,7 @@ class GAN(BaseModel):
         
         # Train the GAN
         generator_loss = self.gan.generator_step(noise, cond_emb)
-        discriminator_loss = self.gan.discriminator_step(fake_latent, noise, cond_emb)
+        discriminator_loss = self.gan.discriminator_step(noise, real_latent, cond_emb)
 
 
          
@@ -829,7 +829,7 @@ class GAN(BaseModel):
             
             
             
-            z = self.gan(noise, text_emb)#.unsqueeze(0)
+            z = self.gan(noise, text_emb).unsqueeze(0)
                     
 
         with torch.no_grad():
