@@ -362,7 +362,9 @@ class CGAN(pl.LightningModule):
     fake_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
 
     #print('real latent b4 self', z.shape, text_emb.shape)
-    real_latent_pred = self(z.squeeze(), text_emb).detach() 
+    if len(z.size()) > 2:
+        z = z.squeeze()
+    real_latent_pred = self(z, text_emb).detach() 
     #print('generated latent', real_latent_pred.shape)
     #fake_pred = torch.squeeze(self.discriminator(fake_latent, 1.0, 6))
     real_pred = self.discriminator(real_latent_pred, text_emb)
@@ -376,8 +378,8 @@ class CGAN(pl.LightningModule):
 
     
   def configure_optimizers(self):
-    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.0002)
-    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.0002)
+    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.0001)
+    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.0001)
     return [g_optimizer, d_optimizer], []
 
 

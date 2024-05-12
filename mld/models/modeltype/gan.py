@@ -257,7 +257,7 @@ class GAN(BaseModel):
             noise = torch.randn((len(texts), self.noise_dim), device=text_emb.device, dtype=torch.float)
             
             
-            z = self.gan(noise, text_emb, 1.0, 6).unsqueeze(0)
+            z = self.gan(noise, text_emb).unsqueeze(0)
             
 
         with torch.no_grad():
@@ -577,7 +577,7 @@ class GAN(BaseModel):
         fake_latent = self.gan(noise, cond_emb)
         
         # Train the GAN
-        print('real lt, fake lt', real_latent.shape, fake_latent.shape, noise.shape, cond_emb.shape)
+        #print('real lt, fake lt', real_latent.shape, fake_latent.shape, noise.shape, cond_emb.shape)
         generator_loss = self.gan.generator_step(noise, cond_emb)
         discriminator_loss = self.gan.discriminator_step(fake_latent, noise, cond_emb)
          
@@ -833,7 +833,7 @@ class GAN(BaseModel):
 
         with torch.no_grad():
             if self.vae_type in ["mld", "vposert", "actor"]:
-                print('vae decode', z.shape, len(lengths))
+                #print('vae decode', z.shape, len(lengths))
                 feats_rst = self.vae.decode(z, lengths)
             elif self.vae_type == "no":
                 feats_rst = z.permute(1, 0, 2)
