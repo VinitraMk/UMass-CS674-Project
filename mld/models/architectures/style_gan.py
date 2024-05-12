@@ -34,34 +34,6 @@ class WSLinear(nn.Module):
         #print('ws line', x.shape)
         return self.linear(x * self.scale) + self.bias
 
-class WSConv1d(nn.Module):
-    def __init__(
-        self, in_channels, out_channels, kernel_size=1, stride=1, padding=0
-    ):
-        super(WSConv1d, self).__init__()
-        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, stride, padding)
-        self.scale = (2 / (in_channels * (kernel_size ** 2))) ** 0.5
-        self.bias = self.conv.bias
-        self.conv.bias = None
-
-        # initialize conv layer
-        nn.init.normal_(self.conv.weight)
-        nn.init.zeros_(self.bias)
-
-    def forward(self, x):
-        return self.conv(x * self.scale) + self.bias.view(1, self.bias.shape[0])
-
-class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(ConvBlock, self).__init__()
-        self.conv1 = WSConv1d(in_channels, out_channels)
-        self.conv2 = WSConv1d(out_channels, out_channels)
-        self.leaky = nn.LeakyReLU(0.2)
-
-    def forward(self, x):
-        x = self.leaky(self.conv1(x))
-        x = self.leaky(self.conv2(x))
-        return x
 
 class MappingNetwork(nn.Module):
 
@@ -161,19 +133,6 @@ class Generator(nn.Module):
     #self.initial_conv = nn.Conv1d(in_channels, in_channels, kernel_size=1, stride = 1)
     self.initial_lin = nn.Linear(in_channels, in_channels)
     self.leaky = nn.LeakyReLU(0.2, inplace = True)
-    self.upscale = nn.Upsample(scale_factor=2, mode='bilinear')
-
-    self.initial_xyz = WSConv1d(in_channels, init_channels, kernel_size = 1, stride = 1)
-    self.prog_blocks, self.xyz_layers = (nn.ModuleList([]), nn.ModuleList([self.initial_xyz]))
-
-    for i in range(len(factors) - 1):
-        in_c = int(in_channels * factors[i])
-        out_c = int(in_channels * factors[i + 1])
-        print('prog setup', in_c, out_c, factors[i+1], factors[i])
-        self.prog_blocks.append(GenBlock(in_c, out_c, latent_out))
-        self.xyz_layers.append(
-            WSLinear(out_c, 1)
-        )
 
     '''
     self.layer1 = nn.Sequential(nn.Linear(in_features=latent_in+text_in, out_features=1024),
@@ -184,10 +143,7 @@ class Generator(nn.Module):
                                 )
     '''
 
-  def fade_in(self, alpha, upscaled, generated):
-    return torch.tanh(alpha * generated * (1 - alpha) * upscaled)
-
-  def forward(self, z, text_emb, alpha = 1.0, steps = 4):
+  def forward(self, z, text_emb):
 
     # x is a tensor of size (batch_size, 110)
     # reshapeing text_emb
@@ -207,30 +163,8 @@ class Generator(nn.Module):
     #print('x out', x.shape)
     out = self.initial_adain2(self.leaky(self.initial_noise2(x)), w)
     #print('out', out.shape)
-    '''
-    if steps == 0:
-        return self.initial_xyz(x)
     
-    for step in range(steps):
-        out = out.unsqueeze(1)
-        upscaled = F.interpolate(out, scale_factor = 2, mode = 'linear').squeeze()
-        print('step pg', step, upscaled.shape, w.shape)
-        out = self.prog_blocks[step](upscaled, w)
-        print('after step out', out.shape)
-    ''' 
-
-    #final_upscaled = self.xyz_layers[steps - 1](upscaled)
-    #final_out = self.xyz_layers[steps](out)
-    #final_out = self.fade_in(alpha, out, final_out)
-    #print('final out gen', out.shape)
     return out
-    '''
-    x = self.layer1(x)
-    x = self.layer2(x)
-    x = self.output(x)
-    return x
-    '''
-
 
 
 class Discriminator(nn.Module):
@@ -252,36 +186,6 @@ class Discriminator(nn.Module):
         self.prog_blocks.append(WSLinear(conv_in, conv_out))
 
     self.sigmoid = nn.Sigmoid()
-    '''
-    for i in range(len(factors) - 1, 0, -1):
-        conv_in = int(in_channels * factors[i])
-        conv_out = int(in_channels * factors[i - 1])
-        self.prog_blocks.append(ConvBlock(conv_in, conv_out))
-        self.xyz_layers.append(
-            WSConv1d(xyz_channels, conv_in, kernel_size=1, stride=1, padding=0)
-        )
-    
-    self.initial_xyz = WSConv1d(xyz_channels, in_channels, kernel_size = 1, stride = 1, padding = 0)
-    self.xyz_layers.append(self.initial_xyz)
-    self.final_block = nn.Sequential(
-        WSConv1d(in_channels + 1, in_channels, kernel_size = 1),
-        nn.LeakyReLU(0.2),
-        WSConv1d(in_channels, in_channels, kernel_size = 1, stride = 1),
-        nn.LeakyReLU(0.2),
-        WSConv1d(in_channels, 1, kernel_size = 1, stride = 1)
-    )
-    self.final_prob_layer = WSLinear(21, 1)
-    '''
-    '''
-    self.layer1 = nn.Sequential(nn.Linear(in_features=latent_out+text_in, out_features=1024),
-                                nn.LeakyReLU())
-    self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
-                                nn.LeakyReLU())
-    self.layer3 = nn.Sequential(nn.Linear(in_features=512, out_features=256),
-                                nn.LeakyReLU())
-    self.output = nn.Sequential(nn.Linear(in_features=256, out_features=1),
-                                nn.Sigmoid())
-    '''
 
   def forward(self, x, text_emb, alpha = 1.0, steps = 4):
     # pass the labels into a embedding layer
