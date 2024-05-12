@@ -23,7 +23,6 @@ from mld.utils.temos_utils import remove_padding
 
 from .base import BaseModel
 
-
 class MLD(BaseModel):
     """
     Stage 1 vae
