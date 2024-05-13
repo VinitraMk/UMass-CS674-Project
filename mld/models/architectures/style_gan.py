@@ -8,6 +8,9 @@ import torch.nn.functional as F
 #factors = [2, 4, 8, 16, 32, 16, 8]
 factors = [1, 1/2, 1/4, 1/8, 1/256]
 
+def wasserstein_loss(real_pred, fake_pred):
+    return torch.mean(real_pred - fake_pred)
+
 class PixelNorm(nn.Module):
     def __init__(self):
         super().__init__()
@@ -200,7 +203,7 @@ class Discriminator(nn.Module):
     out = self.init_lin(x)
     for step in range(cur_step, len(self.prog_blocks)):
         out = self.prog_blocks[step](out)
-    out = self.sigmoid(out)
+    #out = self.sigmoid(out)
     return out
 
 class CGAN(pl.LightningModule):
@@ -244,7 +247,8 @@ class CGAN(pl.LightningModule):
     # loss, which is equivalent to minimizing the loss with the true
     # labels flipped (i.e. y_true=1 for fake images). We do this
     # as PyTorch can only minimize a function instead of maximizing
-    g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
+    #g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
+    g_loss = -torch.mean(fake_pred)
     #print('gloss', g_loss.shape, g_loss, fake_pred.shape)
 
     return g_loss
@@ -266,16 +270,17 @@ class CGAN(pl.LightningModule):
     #print('after reshape real shape', x.shape)
     #real_pred = torch.squeeze(self.discriminator(x, 1.0, 6))
     fake_pred = self.discriminator(z_fake, text_emb)
-    fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
+    #fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
 
     #print('real latent b4 self', z.shape, text_emb.shape)
     if len(z.size()) > 2:
         z = z.squeeze()
     real_pred = self.discriminator(z, text_emb)
-    real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
+    #real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
 
 
-    d_loss = (real_loss + fake_loss) / 2
+    #d_loss = (real_loss + fake_loss) / 2
+    d_loss = wasserstein_loss(real_pred, fake_pred)
     #print('dloss', d_loss.shape, d_loss)
     return d_loss
 
