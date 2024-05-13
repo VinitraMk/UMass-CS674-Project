@@ -27,7 +27,7 @@ TRAIN:
   # Size of batches
   BATCH_SIZE: 64
   # Total epochs for training
-  END_EPOCH: 20
+  END_EPOCH: 200
 
   RESUME: '' # Resume training from this path
   PRETRAINED_VAE: './checkpoints/best_checkpoint/VAE_epoch=199.ckpt' # vae model path
@@ -52,7 +52,7 @@ EVAL:
 # The following are testing settings
 #####################################
 TEST:
-  CHECKPOINTS: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/experiments/gan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_cond75_01/checkpoints/epoch=19-v3.ckpt' # Pretrained model path
+  CHECKPOINTS: './experiments/gan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_cond75_01/checkpoints/epoch=19-v5.ckpt' # Pretrained model path
   DATASETS: ['kit'] # training datasets
   SPLIT: test
   BATCH_SIZE: 1 # training Batch size
@@ -106,7 +106,7 @@ model:
 # The following are loggers settings
 #####################################
 LOGGER:
-  SACE_CHECKPOINT_EPOCH: 10
+  SACE_CHECKPOINT_EPOCH: 20
   LOG_EVERY_STEPS: 1
   VAL_EVERY_STEPS: 200
   TENSORBOARD: True
