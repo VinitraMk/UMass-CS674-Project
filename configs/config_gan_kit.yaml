@@ -27,7 +27,7 @@ TRAIN:
   # Size of batches
   BATCH_SIZE: 64
   # Total epochs for training
-  END_EPOCH: 5
+  END_EPOCH: 20
 
   RESUME: '' # Resume training from this path
   PRETRAINED_VAE: './checkpoints/best_checkpoint/VAE_epoch=199.ckpt' # vae model path
@@ -106,7 +106,7 @@ model:
 # The following are loggers settings
 #####################################
 LOGGER:
-  SACE_CHECKPOINT_EPOCH: 5
+  SACE_CHECKPOINT_EPOCH: 10
   LOG_EVERY_STEPS: 1
   VAL_EVERY_STEPS: 200
   TENSORBOARD: True

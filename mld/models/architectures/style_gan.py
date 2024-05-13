@@ -174,11 +174,12 @@ class Discriminator(nn.Module):
   with the predicted class probabilities (generated or real data)
   '''
 
-  def __init__(self, in_channels = 256):
+  def __init__(self, text_in = 768, in_channels = 256):
     super(Discriminator, self).__init__()
     
     self.prog_blocks, self.xyz_layers = nn.ModuleList([]), nn.ModuleList([])
     self.leaky = nn.LeakyReLU(0.2)
+    self.init_lin = nn.Linear(in_channels + text_in, in_channels)
     for i in range(len(factors) - 1):
         conv_in = int(in_channels * factors[i])
         conv_out = int(in_channels * factors[i + 1])
@@ -187,14 +188,16 @@ class Discriminator(nn.Module):
 
     self.sigmoid = nn.Sigmoid()
 
-  def forward(self, x, text_emb, alpha = 1.0, steps = 4):
+  def forward(self, z, text_emb, steps = 4):
     # pass the labels into a embedding layer
     # labels_embedding = self.embedding(y)
     # concat the embedded labels and the input tensor
     # x is a tensor of size (batch_size, 794)
     #print('disc inp shape', x.shape, len(self.prog_blocks), steps)
     cur_step = len(self.prog_blocks) - steps
-    out = x
+    #print('disc', z.shape, text_emb.shape)
+    x = torch.cat([z, torch.squeeze(text_emb, 1)], dim=-1)
+    out = self.init_lin(x)
     for step in range(cur_step, len(self.prog_blocks)):
         out = self.prog_blocks[step](out)
     out = self.sigmoid(out)
