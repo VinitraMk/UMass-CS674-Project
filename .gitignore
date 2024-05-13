@@ -6,4 +6,9 @@
 /pose_data
 /joints
 /motionml
+/checkpoints
 /deps
+/**/__pycache__
+*.pyc
+/experiments
+/results
