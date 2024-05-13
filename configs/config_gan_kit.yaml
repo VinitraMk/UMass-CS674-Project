@@ -8,7 +8,7 @@ NAME: 1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_cond75_01
 # 1. use a tiny dataset for trianing and evaluation
 # 2. validate more intensively
 # 3. will not use `wandb logger`
-DEBUG: True 
+DEBUG: False
 # Devices. Optional: “cpu”, “gpu”
 ACCELERATOR: 'gpu'
 # Index of GPUs eg. [0] or [0,1,2,3]
@@ -27,10 +27,10 @@ TRAIN:
   # Size of batches
   BATCH_SIZE: 64
   # Total epochs for training
-  END_EPOCH: 100
+  END_EPOCH: 5
 
   RESUME: '' # Resume training from this path
-  PRETRAINED_VAE: './experiments/mld/VAE_TEST/checkpoints/epoch=4.ckpt' # vae model path
+  PRETRAINED_VAE: './checkpoints/best_checkpoint/VAE_epoch=199.ckpt' # vae model path
   OPTIM:
     TYPE: AdamW # Optimizer type
     LR: 1e-4 # Learning rate
@@ -52,7 +52,7 @@ EVAL:
 # The following are testing settings
 #####################################
 TEST:
-  CHECKPOINTS: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/experiments/gan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_cond75_01/checkpoints/epoch=49.ckpt' # Pretrained model path
+  CHECKPOINTS: './experiments/gan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_cond75_01/checkpoints/epoch=4.ckpt' # Pretrained model path
   DATASETS: ['kit'] # training datasets
   SPLIT: test
   BATCH_SIZE: 1 # training Batch size
@@ -106,7 +106,7 @@ model:
 # The following are loggers settings
 #####################################
 LOGGER:
-  SACE_CHECKPOINT_EPOCH: 10
+  SACE_CHECKPOINT_EPOCH: 5
   LOG_EVERY_STEPS: 1
   VAL_EVERY_STEPS: 200
   TENSORBOARD: True

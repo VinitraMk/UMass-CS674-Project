@@ -268,11 +268,7 @@ class CGAN(pl.LightningModule):
     #print('real latent b4 self', z.shape, text_emb.shape)
     if len(z.size()) > 2:
         z = z.squeeze()
-    real_latent_pred = self(z, text_emb).detach() 
-    #print('generated latent', real_latent_pred.shape)
-    #fake_pred = torch.squeeze(self.discriminator(fake_latent, 1.0, 6))
-    real_pred = self.discriminator(real_latent_pred, text_emb)
-    #print('fake pred', real_pred.shape)
+    real_pred = self.discriminator(z, text_emb)
     real_loss = self.BCE_loss(real_pred, torch.zeros_like(real_pred))
 
 
