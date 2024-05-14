@@ -6,7 +6,8 @@ import torch.nn.functional as F
 #factors = [1, 1, 1, 1, 1 / 2, 1 / 4, 1 / 8]
 #factors = [1, 1, 1, 1, 1, 1, 1, 1, 1]
 #factors = [2, 4, 8, 16, 32, 16, 8]
-factors = [1, 1/2, 1/4, 1/8, 1/256]
+factors = [1, 1/2, 1/4, 1/8]
+#factors = [1, 2, 4]
 
 def wasserstein_loss(real_pred, fake_pred):
     return torch.mean(real_pred - fake_pred)
@@ -95,25 +96,6 @@ class InjectNoise(nn.Module):
         return out
 
 
-class GenBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, w_dim):
-        super(GenBlock, self).__init__()
-        #self.conv1 = WSConv1d(in_channels, out_channels)
-        #self.conv2 = WSConv1d(out_channels, out_channels)
-        self.lin1 = WSLinear(in_channels, out_channels)
-        self.lin2 = WSLinear(out_channels, out_channels)
-        self.leaky = nn.LeakyReLU(0.2, inplace=True)
-        self.inject_noise1 = InjectNoise(out_channels)
-        self.inject_noise2 = InjectNoise(out_channels)
-        self.adain1 = AdaIN(out_channels, w_dim)
-        self.adain2 = AdaIN(out_channels, w_dim)
-
-    def forward(self, x, w):
-        #print('gb inp', x.shape, w.shape, self.conv1(x).shape)
-        x = self.adain1(self.leaky(self.inject_noise1(self.lin1(x))), w)
-        x = self.adain2(self.leaky(self.inject_noise2(self.lin1(x))), w)
-        return x
-
 class Generator(nn.Module):
   '''
   Generator class in a CGAN. Accepts a noise tensor (latent dim 100)
@@ -122,13 +104,14 @@ class Generator(nn.Module):
   from the real MNIST digits.
   '''
 
-  def __init__(self, latent_in, text_in, latent_out, in_channels = 256, init_channels = 32):
+  def __init__(self, latent_in, text_in, latent_out, in_channels = 256, prog_out = 1024):
     super().__init__()
     #in_channels = latent_in + text_in
     print('args', latent_in, text_in, latent_out, in_channels)
     self.in_channels = in_channels
     #self.starting_constant = torch.ones((1, in_channels))
     self.map = MappingNetwork(text_in + latent_in, latent_out)
+    '''
     self.initial_adain1 = AdaIN(in_channels, latent_out)
     self.initial_adain2 = AdaIN(in_channels, latent_out)
     self.initial_noise1 = InjectNoise(in_channels)
@@ -136,37 +119,40 @@ class Generator(nn.Module):
     #self.initial_conv = nn.Conv1d(in_channels, in_channels, kernel_size=1, stride = 1)
     self.initial_lin = nn.Linear(in_channels, in_channels)
     self.leaky = nn.LeakyReLU(0.2, inplace = True)
-
-    '''
-    self.layer1 = nn.Sequential(nn.Linear(in_features=latent_in+text_in, out_features=1024),
-                                nn.LeakyReLU())
-    self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
-                                nn.LeakyReLU())
-    self.output = nn.Sequential(nn.Linear(in_features=512, out_features=latent_out),
-                                )
+    self.prog_blocks = nn.ModuleList([])
+    for i in range(len(factors) - 1):
+        self.prog_blocks.append(nn.Sequential(
+            WSLinear(in_channels * factors[i], in_channels * factors[i+1]),
+            nn.LeakyReLU(0.2, inplace=True)
+        ))
     '''
 
-  def forward(self, z, text_emb):
+
+  def forward(self, z, text_emb, skip_init = False):
 
     # x is a tensor of size (batch_size, 110)
     # reshapeing text_emb
     #print('z, txt', z.shape, text_emb.shape)
+    '''
+    if not(skip_init):
+        text_emb = text_emb.reshape(text_emb.shape[0],-1)
+        x = torch.cat([z, text_emb], dim=-1)
+        #print('x', x.shape, z.shape)
+        noise = torch.randn(x.shape[0], x.shape[1]).to(torch.device("cuda"))
+        w = self.map(noise)
+        starting_constant = nn.Parameter(torch.ones(w.shape)).to(torch.device("cuda"))
+        x = self.initial_adain1(self.initial_noise1(starting_constant), w)
+        x = self.initial_lin(x)
+        out = self.initial_adain2(self.leaky(self.initial_noise2(x)), w)
+    else:
+        out = z
+
+    for i in range(len(self.prog_blocks)):
+        out = self.prog_blocks[i](out)
+    '''
     text_emb = text_emb.reshape(text_emb.shape[0],-1)
     x = torch.cat([z, text_emb], dim=-1)
-    #print('x', x.shape, z.shape)
-    noise = torch.randn(x.shape[0], x.shape[1]).to(torch.device("cuda"))
-    w = self.map(noise)
-    starting_constant = nn.Parameter(torch.ones(w.shape)).to(torch.device("cuda"))
-    #self.starting_constant = nn.Parameter(self.starting_constant.tile((z.shape[0],)).reshape(z.shape[0], -1)).to(torch.device("cuda"))
-    #print('w', w.shape, starting_constant.shape)
-    x = self.initial_adain1(self.initial_noise1(starting_constant), w)
-    #x = self.initial_conv(x)
-    #print('x init adain1', x.shape)
-    x = self.initial_lin(x)
-    #print('x out', x.shape)
-    out = self.initial_adain2(self.leaky(self.initial_noise2(x)), w)
-    #print('out', out.shape)
-    
+    out = self.map(x)
     return out
 
 
@@ -180,30 +166,37 @@ class Discriminator(nn.Module):
   def __init__(self, text_in = 768, in_channels = 256):
     super(Discriminator, self).__init__()
     
-    self.prog_blocks, self.xyz_layers = nn.ModuleList([]), nn.ModuleList([])
+    self.prog_blocks = nn.ModuleList([])
     self.leaky = nn.LeakyReLU(0.2)
+    #c_in = in_channels * factors[-1]
     self.init_lin = nn.Linear(in_channels + text_in, in_channels)
     for i in range(len(factors) - 1):
-        conv_in = int(in_channels * factors[i])
-        conv_out = int(in_channels * factors[i + 1])
-        #print('disc setup prog', conv_in, conv_out)
-        self.prog_blocks.append(WSLinear(conv_in, conv_out))
+        c_in = int(in_channels * factors[i])
+        c_out = int(in_channels * factors[i + 1])
+        self.prog_blocks.append(nn.Sequential(
+            WSLinear(c_in, c_out),
+            nn.LeakyReLU(0.2, True)
+        ))
+    self.prog_blocks.append(
+        nn.Linear(int(in_channels * factors[-1]), 1)
+    )
 
     self.sigmoid = nn.Sigmoid()
 
-  def forward(self, z, text_emb, steps = 4):
+  def forward(self, z, text_emb):
     # pass the labels into a embedding layer
     # labels_embedding = self.embedding(y)
     # concat the embedded labels and the input tensor
     # x is a tensor of size (batch_size, 794)
     #print('disc inp shape', x.shape, len(self.prog_blocks), steps)
-    cur_step = len(self.prog_blocks) - steps
     #print('disc', z.shape, text_emb.shape)
     x = torch.cat([z, torch.squeeze(text_emb, 1)], dim=-1)
     out = self.init_lin(x)
-    for step in range(cur_step, len(self.prog_blocks)):
+    #print('disc prog init', out.shape)
+    for step in range(len(self.prog_blocks)):
         out = self.prog_blocks[step](out)
-    #out = self.sigmoid(out)
+        #print('prog out disc', out.shape)
+    out = self.sigmoid(out)
     return out
 
 class CGAN(pl.LightningModule):
@@ -217,12 +210,12 @@ class CGAN(pl.LightningModule):
     self.discriminator = Discriminator()
     self.BCE_loss = nn.BCELoss()
 
-  def forward(self, z, text_emb):
+  def forward(self, z, text_emb, skip_init = False):
     """
     Generates an image using the generator
     given input noise z and labels y
     """
-    return self.generator(z, text_emb)
+    return self.generator(z, text_emb, skip_init)
 
   def generator_step(self, z, text_emb):
     """
@@ -241,14 +234,15 @@ class CGAN(pl.LightningModule):
 
     # Classify generated image using the discriminator
     #print('fake latent shape', fake_latent.shape)
+    #fake_latent_prog = self.generator(fake_latent, text_emb)
     fake_pred = torch.squeeze(self.discriminator(fake_latent, text_emb))
 
     # Backprop loss. We want to maximize the discriminator's
     # loss, which is equivalent to minimizing the loss with the true
     # labels flipped (i.e. y_true=1 for fake images). We do this
     # as PyTorch can only minimize a function instead of maximizing
-    #g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
-    g_loss = -torch.mean(fake_pred)
+    g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
+    #g_loss = -torch.mean(fake_pred)
     #print('gloss', g_loss.shape, g_loss, fake_pred.shape)
 
     return g_loss
@@ -270,24 +264,24 @@ class CGAN(pl.LightningModule):
     #print('after reshape real shape', x.shape)
     #real_pred = torch.squeeze(self.discriminator(x, 1.0, 6))
     fake_pred = self.discriminator(z_fake, text_emb)
-    #fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
+    fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
 
     #print('real latent b4 self', z.shape, text_emb.shape)
     if len(z.size()) > 2:
         z = z.squeeze()
     real_pred = self.discriminator(z, text_emb)
-    #real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
+    real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
 
 
-    #d_loss = (real_loss + fake_loss) / 2
-    d_loss = wasserstein_loss(real_pred, fake_pred)
+    d_loss = (real_loss + fake_loss) / 2
+    #d_loss = wasserstein_loss(real_pred, fake_pred)
     #print('dloss', d_loss.shape, d_loss)
     return d_loss
 
     
   def configure_optimizers(self):
-    g_optimizer = torch.optim.RMSprop(self.generator.parameters(), lr=0.00005)
-    d_optimizer = torch.optim.RMSprop(self.discriminator.parameters(), lr=0.00005)
+    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.0001)
+    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.0001)
     return [g_optimizer, d_optimizer], []
 
 
