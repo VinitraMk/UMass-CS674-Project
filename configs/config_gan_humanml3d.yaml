@@ -27,7 +27,7 @@ TRAIN:
   # Size of batches
   BATCH_SIZE: 64
   # Total epochs for training
-  END_EPOCH: 1
+  END_EPOCH: 10
 
   RESUME: '' # Resume training from this path
   PRETRAINED_VAE: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/checkpoints/best_checkpoint/VAE_HUMAN_ML_epoch=1249.ckpt' # vae model path
