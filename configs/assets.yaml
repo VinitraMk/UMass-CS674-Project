@@ -8,8 +8,11 @@ DATASET:
   TRANSFORM_PATH: './mld/transforms/'
   WORD_VERTILIZER_PATH: './deps/t2m/glove/'
   KIT:
-    ROOT: './motionml' # KIT directory
-    SPLIT_ROOT: './motionml' # KIT splits directory
+    ROOT: './motionml_kit' # KIT directory
+    SPLIT_ROOT: './motionml_kit' # KIT splits directory
+  HUMANML3D:
+    ROOT: './motionml' # HumanML3D directory
+    SPLIT_ROOT: './motionml' # HumanML3D splits directory
 
 model:
   bert_path: './deps/distilbert-base-uncased' # bert model path for all text encoders

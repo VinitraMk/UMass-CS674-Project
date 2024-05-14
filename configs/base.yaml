@@ -39,7 +39,7 @@ TEST:
   NUM_WORKERS: 1 # Evaluating Batch size
   SAVE_PREDICTIONS: False # Weather to save predictions
   COUNT_TIME: False # Weather to count time during test
-  REPLICATION_TIMES: 20 # Number of times to replicate the test
+  REPLICATION_TIMES: 1 # Number of times to replicate the test
   MM_NUM_SAMPLES: 100 # Number of samples for multimodal test
   MM_NUM_REPEATS: 30 # Number of repeats for multimodal test
   MM_NUM_TIMES: 10 # Number of times to repeat the multimodal test

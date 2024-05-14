@@ -286,8 +286,8 @@ class CGAN(pl.LightningModule):
 
     
   def configure_optimizers(self):
-    g_optimizer = torch.optim.RMSprop(self.generator.parameters(), lr=0.00001)
-    d_optimizer = torch.optim.RMSprop(self.discriminator.parameters(), lr=0.00001)
+    g_optimizer = torch.optim.RMSprop(self.generator.parameters(), lr=0.00005)
+    d_optimizer = torch.optim.RMSprop(self.discriminator.parameters(), lr=0.00005)
     return [g_optimizer, d_optimizer], []
 
 
