@@ -19,7 +19,7 @@ DEVICE: [0]
 #####################################
 TRAIN:
   # Model stage. Optional: "vae", "diffusion"
-  STAGE: gan
+  STAGE: wgan
   # Training dataset name
   DATASETS: ['humanml3d']
   # Number of dataloader workers
@@ -52,7 +52,7 @@ EVAL:
 # The following are testing settings
 #####################################
 TEST:
-  CHECKPOINTS: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/experiments/gan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_uncond75_01/checkpoints/epoch=9-v6.ckpt' # Pretrained model path
+  CHECKPOINTS: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/experiments/wgan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_uncond75_01/checkpoints/epoch=0-v6.ckpt' # Pretrained model path
   DATASETS: ['humanml3d'] # training datasets
   SPLIT: test
   BATCH_SIZE: 1 # training Batch size
@@ -91,7 +91,7 @@ LOSS:
 #####################################
 model:
   vae: true # whether vae model
-  model_type: gan # model type
+  model_type: wgan # model type
   condition: 'text'
   latent_dim: [1, 256] # latent dimension
   ff_size: 1024 #
@@ -106,7 +106,7 @@ model:
 # The following are loggers settings
 #####################################
 LOGGER:
-  SACE_CHECKPOINT_EPOCH: 10
+  SACE_CHECKPOINT_EPOCH: 1
   LOG_EVERY_STEPS: 1
   VAL_EVERY_STEPS: 200
   TENSORBOARD: True

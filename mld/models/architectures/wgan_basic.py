@@ -3,67 +3,10 @@ import torch.nn as nn
 import pytorch_lightning as pl
 import torch.nn.functional as F
 
-#factors = [1, 1, 1, 1, 1 / 2, 1 / 4, 1 / 8]
-#factors = [1, 1, 1, 1, 1, 1, 1, 1, 1]
-#factors = [2, 4, 8, 16, 32, 16, 8]
-factors = [1, 1/2, 1/4, 1/8]
-#factors = [1, 2, 4]
-
 def wasserstein_loss(real_pred, fake_pred):
     return torch.mean(real_pred - fake_pred)
 
-class PixelNorm(nn.Module):
-    def __init__(self):
-        super().__init__()
 
-    def forward(self, x):
-        #print('pn', x.shape)
-        out = x / torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + 1e-8)
-        #print('pn out', out.shape)
-        return out
-
-class WSLinear(nn.Module):
-
-    def __init__(self, in_features, out_features):
-        super(WSLinear, self).__init__()
-        self.linear = nn.Linear(in_features, out_features)
-        self.scale = (2 / in_features) ** 0.5
-        self.bias = self.linear.bias
-        self.linear.bias = None
-
-        nn.init.normal_(self.linear.weight)
-        nn.init.zeros_(self.bias)
-
-    def forward(self, x):
-        #print('ws line', x.shape)
-        return self.linear(x * self.scale) + self.bias
-
-
-class MappingNetwork(nn.Module):
-
-    def __init__(self, z_dim, w_dim):
-        super().__init__()
-        self.mapping = nn.Sequential(
-            PixelNorm(),
-            WSLinear(z_dim, w_dim),
-            nn.ReLU(),
-            WSLinear(w_dim, w_dim),
-            nn.ReLU(),
-            WSLinear(w_dim, w_dim),
-            nn.ReLU(),
-            WSLinear(w_dim, w_dim),
-            nn.ReLU(),
-            WSLinear(w_dim, w_dim),
-            nn.ReLU(),
-            WSLinear(w_dim, w_dim),
-            nn.ReLU(),
-            WSLinear(w_dim, w_dim),
-            nn.ReLU(),
-            WSLinear(w_dim, w_dim),
-        )
-
-    def forward(self, x):
-        return self.mapping(x)
 
 class Generator(nn.Module):
   '''
@@ -77,18 +20,26 @@ class Generator(nn.Module):
     super().__init__()
     #in_channels = latent_in + text_in
     #self.starting_constant = torch.ones((1, in_channels))
-    self.map = MappingNetwork(text_in + latent_in, latent_out)
+    self.layer1 = nn.Sequential(nn.Linear(in_features=latent_in+text_in, out_features=1024),
+                                nn.LeakyReLU())
+    self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
+                                nn.LeakyReLU())
+    self.output = nn.Sequential(nn.Linear(in_features=512, out_features=latent_out),
+                                nn.Tanh()
+                                )
 
 
-  def forward(self, z, text_emb, skip_init = False):
+  def forward(self, z, text_emb):
 
     # x is a tensor of size (batch_size, 110)
     # reshapeing text_emb
     #print('z, txt', z.shape, text_emb.shape)
     text_emb = text_emb.reshape(text_emb.shape[0],-1)
     x = torch.cat([z, text_emb], dim=-1)
-    out = self.map(x)
-    return out
+    x = self.layer1(x)
+    x = self.layer2(x)
+    x = self.output(x)
+    return x
 
 
 class Discriminator(nn.Module):
@@ -98,25 +49,16 @@ class Discriminator(nn.Module):
   with the predicted class probabilities (generated or real data)
   '''
 
-  def __init__(self, text_in = 768, in_channels = 256):
+  def __init__(self, latent_in, text_in, latent_out):
     super(Discriminator, self).__init__()
     
-    self.prog_blocks = nn.ModuleList([])
-    self.leaky = nn.LeakyReLU(0.2)
-    #c_in = in_channels * factors[-1]
-    self.init_lin = nn.Linear(in_channels + text_in, in_channels)
-    for i in range(len(factors) - 1):
-        c_in = int(in_channels * factors[i])
-        c_out = int(in_channels * factors[i + 1])
-        self.prog_blocks.append(nn.Sequential(
-            WSLinear(c_in, c_out),
-            nn.LeakyReLU(0.2, True)
-        ))
-    self.prog_blocks.append(
-        nn.Linear(int(in_channels * factors[-1]), 1)
-    )
-
-    self.sigmoid = nn.Sigmoid()
+    self.layer1 = nn.Sequential(nn.Linear(in_features=latent_out+text_in, out_features=1024),
+                                nn.LeakyReLU())
+    self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
+                                nn.LeakyReLU())
+    self.layer3 = nn.Sequential(nn.Linear(in_features=512, out_features=256),
+                                nn.LeakyReLU())
+    self.output = nn.Linear(in_features=256, out_features=1)
 
   def forward(self, z, text_emb):
     # pass the labels into a embedding layer
@@ -125,16 +67,15 @@ class Discriminator(nn.Module):
     # x is a tensor of size (batch_size, 794)
     #print('disc inp shape', x.shape, len(self.prog_blocks), steps)
     #print('disc', z.shape, text_emb.shape)
-    x = torch.cat([z, torch.squeeze(text_emb, 1)], dim=-1)
-    out = self.init_lin(x)
-    #print('disc prog init', out.shape)
-    for step in range(len(self.prog_blocks)):
-        out = self.prog_blocks[step](out)
-        #print('prog out disc', out.shape)
-    out = self.sigmoid(out)
-    return out
+    text_emb = text_emb.reshape(text_emb.shape[0],-1)
+    x = torch.cat([z, text_emb], dim=-1)    
+    x = self.layer1(x)
+    x = self.layer2(x)
+    x = self.layer3(x)
+    x = self.output(x)
+    return x
 
-class CGAN(pl.LightningModule):
+class WGAN(pl.LightningModule):
 
   def __init__(self, latent_in_dim, text_emb_dim, latent_out_dim):
     super().__init__()
@@ -142,15 +83,16 @@ class CGAN(pl.LightningModule):
     self.text_emb_dim = text_emb_dim
     self.latent_out_dim = latent_out_dim
     self.generator = Generator(latent_in_dim, text_emb_dim, latent_out_dim)
-    self.discriminator = Discriminator()
+    self.discriminator = Discriminator(latent_in_dim, text_emb_dim, latent_out_dim)
     self.BCE_loss = nn.BCELoss()
+    self.d_steps = 5
 
-  def forward(self, z, text_emb, skip_init = False):
+  def forward(self, z, text_emb):
     """
     Generates an image using the generator
     given input noise z and labels y
     """
-    return self.generator(z, text_emb, skip_init)
+    return self.generator(z, text_emb)
 
   def adversarial_loss(self, y_hat, y):
     return F.binary_cross_entropy(y_hat, y)
@@ -179,9 +121,7 @@ class CGAN(pl.LightningModule):
     # loss, which is equivalent to minimizing the loss with the true
     # labels flipped (i.e. y_true=1 for fake images). We do this
     # as PyTorch can only minimize a function instead of maximizing
-    #g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
-    g_loss = self.adversarial_loss(fake_pred, torch.ones_like(fake_pred))
-    #g_loss = -torch.mean(fake_pred)
+    g_loss = -torch.mean(fake_pred)
     #print('gloss', g_loss.shape, g_loss, fake_pred.shape)
 
     return g_loss
@@ -203,28 +143,49 @@ class CGAN(pl.LightningModule):
     #print('after reshape real shape', x.shape)
     #real_pred = torch.squeeze(self.discriminator(x, 1.0, 6))
     fake_pred = self.discriminator(z_fake, text_emb)
-    #fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
-    fake_loss = self.adversarial_loss(fake_pred, torch.zeros_like(fake_pred))
-    #print('real latent b4 self', z.shape, text_emb.shape)
 
     if len(z.size()) > 2:
         z = z.squeeze()
     real_pred = self.discriminator(z, text_emb)
-    #real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
-    real_loss = self.adversarial_loss(real_pred, torch.ones_like(real_pred))
 
-
-    d_loss = (real_loss + fake_loss) / 2
-    #d_loss = wasserstein_loss(real_pred, fake_pred)
+    #d_loss = (real_loss + fake_loss) / 2
+    d_loss = wasserstein_loss(real_pred, fake_pred)
+    d_loss = 10 * self.gradient_penalty(z, z_fake, text_emb)
     #print('dloss', d_loss.shape, d_loss)
     return d_loss
 
     
   def configure_optimizers(self):
-    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.00005)
-    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.00005)
+
+    g_optimizer = torch.optim.RMSprop(self.generator.parameters(), lr=0.00001)
+    d_optimizer = torch.optim.RMSprop(self.discriminator.parameters(), lr=0.00001)
     return [g_optimizer, d_optimizer], []
 
+  def gradient_penalty(self, real_pred, fake_pred, text_emb):
+    batch_size = real_pred.size(0)
+    alpha = torch.rand(batch_size, 1, device=self.device)
+    alpha = alpha.expand_as(real_pred)
+
+    interpolates = alpha * real_pred + ((1 - alpha) * fake_pred.detach())
+    interpolates.requires_grad_(True)
+
+    d_interpolates = self.discriminator(interpolates, text_emb)
+    d_interpolates.requires_grad_(True)
+
+    gradients = torch.autograd.grad(
+        outputs=d_interpolates,
+        inputs=interpolates,
+        grad_outputs=torch.ones(d_interpolates.size(), device=self.device),
+        create_graph=True,
+        retain_graph=True,
+        materialize_grads=True,
+    )[0]
+
+
+    gradients = gradients.view(batch_size, -1)
+    gradient_norm = gradients.norm(2, dim=1)
+    gradient_penalty = ((gradient_norm - 1) ** 2).mean()
+    return gradient_penalty
 
 # if __name__ == "__main__":
 #   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

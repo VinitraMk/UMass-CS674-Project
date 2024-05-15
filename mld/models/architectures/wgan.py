@@ -152,9 +152,6 @@ class CGAN(pl.LightningModule):
     """
     return self.generator(z, text_emb, skip_init)
 
-  def adversarial_loss(self, y_hat, y):
-    return F.binary_cross_entropy(y_hat, y)
-
   def generator_step(self, z, text_emb):
     """
     Training step for generator
@@ -179,8 +176,7 @@ class CGAN(pl.LightningModule):
     # loss, which is equivalent to minimizing the loss with the true
     # labels flipped (i.e. y_true=1 for fake images). We do this
     # as PyTorch can only minimize a function instead of maximizing
-    #g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
-    g_loss = self.adversarial_loss(fake_pred, torch.ones_like(fake_pred))
+    g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
     #g_loss = -torch.mean(fake_pred)
     #print('gloss', g_loss.shape, g_loss, fake_pred.shape)
 
@@ -203,15 +199,13 @@ class CGAN(pl.LightningModule):
     #print('after reshape real shape', x.shape)
     #real_pred = torch.squeeze(self.discriminator(x, 1.0, 6))
     fake_pred = self.discriminator(z_fake, text_emb)
-    #fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
-    fake_loss = self.adversarial_loss(fake_pred, torch.zeros_like(fake_pred))
+    fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
     #print('real latent b4 self', z.shape, text_emb.shape)
 
     if len(z.size()) > 2:
         z = z.squeeze()
     real_pred = self.discriminator(z, text_emb)
-    #real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
-    real_loss = self.adversarial_loss(real_pred, torch.ones_like(real_pred))
+    real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
 
 
     d_loss = (real_loss + fake_loss) / 2
@@ -221,8 +215,8 @@ class CGAN(pl.LightningModule):
 
     
   def configure_optimizers(self):
-    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.00005)
-    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.00005)
+    g_optimizer = torch.optim.RMSprop(self.generator.parameters(), lr=0.0002)
+    d_optimizer = torch.optim.RMSprop(self.discriminator.parameters(), lr=0.0002)
     return [g_optimizer, d_optimizer], []
 
 
