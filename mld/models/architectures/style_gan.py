@@ -65,37 +65,6 @@ class MappingNetwork(nn.Module):
     def forward(self, x):
         return self.mapping(x)
 
-
-class AdaIN(nn.Module):
-
-    def __init__(self, channels, w_dim):
-        super().__init__()
-        self.instance_norm = nn.InstanceNorm1d(channels)
-        self.style_scale = WSLinear(w_dim, channels)
-        self.style_bias = WSLinear(w_dim, channels)
-
-    def forward(self, x, w):
-        #print('adain========>', x.shape, w.shape)
-        x = self.instance_norm(x)
-        style_scale = self.style_scale(w)
-        style_bias = self.style_bias(w)
-        out = style_scale * x + style_bias
-        #print('st', style_scale.shape, x.shape, style_bias.shape)
-        return out
-
-class InjectNoise(nn.Module):
-    def __init__(self, channels):
-        super().__init__()
-        self.weight = nn.Parameter(torch.zeros(1, channels))
-
-    def forward(self, x):
-        #print('inoise', x.shape, self.weight.shape, x.device)
-        noise = torch.randn((x.shape[0], x.shape[1]), device=x.device)
-        out = x + self.weight * noise
-        #print('out', out.shape)
-        return out
-
-
 class Generator(nn.Module):
   '''
   Generator class in a CGAN. Accepts a noise tensor (latent dim 100)
@@ -104,28 +73,11 @@ class Generator(nn.Module):
   from the real MNIST digits.
   '''
 
-  def __init__(self, latent_in, text_in, latent_out, in_channels = 256, prog_out = 1024):
+  def __init__(self, latent_in, text_in, latent_out):
     super().__init__()
     #in_channels = latent_in + text_in
-    print('args', latent_in, text_in, latent_out, in_channels)
-    self.in_channels = in_channels
     #self.starting_constant = torch.ones((1, in_channels))
     self.map = MappingNetwork(text_in + latent_in, latent_out)
-    '''
-    self.initial_adain1 = AdaIN(in_channels, latent_out)
-    self.initial_adain2 = AdaIN(in_channels, latent_out)
-    self.initial_noise1 = InjectNoise(in_channels)
-    self.initial_noise2 = InjectNoise(in_channels)
-    #self.initial_conv = nn.Conv1d(in_channels, in_channels, kernel_size=1, stride = 1)
-    self.initial_lin = nn.Linear(in_channels, in_channels)
-    self.leaky = nn.LeakyReLU(0.2, inplace = True)
-    self.prog_blocks = nn.ModuleList([])
-    for i in range(len(factors) - 1):
-        self.prog_blocks.append(nn.Sequential(
-            WSLinear(in_channels * factors[i], in_channels * factors[i+1]),
-            nn.LeakyReLU(0.2, inplace=True)
-        ))
-    '''
 
 
   def forward(self, z, text_emb, skip_init = False):
@@ -133,23 +85,6 @@ class Generator(nn.Module):
     # x is a tensor of size (batch_size, 110)
     # reshapeing text_emb
     #print('z, txt', z.shape, text_emb.shape)
-    '''
-    if not(skip_init):
-        text_emb = text_emb.reshape(text_emb.shape[0],-1)
-        x = torch.cat([z, text_emb], dim=-1)
-        #print('x', x.shape, z.shape)
-        noise = torch.randn(x.shape[0], x.shape[1]).to(torch.device("cuda"))
-        w = self.map(noise)
-        starting_constant = nn.Parameter(torch.ones(w.shape)).to(torch.device("cuda"))
-        x = self.initial_adain1(self.initial_noise1(starting_constant), w)
-        x = self.initial_lin(x)
-        out = self.initial_adain2(self.leaky(self.initial_noise2(x)), w)
-    else:
-        out = z
-
-    for i in range(len(self.prog_blocks)):
-        out = self.prog_blocks[i](out)
-    '''
     text_emb = text_emb.reshape(text_emb.shape[0],-1)
     x = torch.cat([z, text_emb], dim=-1)
     out = self.map(x)
@@ -217,6 +152,9 @@ class CGAN(pl.LightningModule):
     """
     return self.generator(z, text_emb, skip_init)
 
+  def adversarial_loss(self, y_hat, y):
+    return F.binary_cross_entropy(y_hat, y)
+
   def generator_step(self, z, text_emb):
     """
     Training step for generator
@@ -241,7 +179,8 @@ class CGAN(pl.LightningModule):
     # loss, which is equivalent to minimizing the loss with the true
     # labels flipped (i.e. y_true=1 for fake images). We do this
     # as PyTorch can only minimize a function instead of maximizing
-    g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
+    #g_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
+    g_loss = self.adversarial_loss(fake_pred, torch.ones_like(fake_pred))
     #g_loss = -torch.mean(fake_pred)
     #print('gloss', g_loss.shape, g_loss, fake_pred.shape)
 
@@ -264,13 +203,15 @@ class CGAN(pl.LightningModule):
     #print('after reshape real shape', x.shape)
     #real_pred = torch.squeeze(self.discriminator(x, 1.0, 6))
     fake_pred = self.discriminator(z_fake, text_emb)
-    fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
-
+    #fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
+    fake_loss = self.adversarial_loss(fake_pred, torch.zeros_like(fake_pred))
     #print('real latent b4 self', z.shape, text_emb.shape)
+
     if len(z.size()) > 2:
         z = z.squeeze()
     real_pred = self.discriminator(z, text_emb)
-    real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
+    #real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
+    real_loss = self.adversarial_loss(real_pred, torch.ones_like(real_pred))
 
 
     d_loss = (real_loss + fake_loss) / 2
@@ -280,8 +221,8 @@ class CGAN(pl.LightningModule):
 
     
   def configure_optimizers(self):
-    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.0001)
-    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.0001)
+    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.0002)
+    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.0002)
     return [g_optimizer, d_optimizer], []
 
 

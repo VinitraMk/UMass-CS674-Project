@@ -633,7 +633,8 @@ class GAN(BaseModel):
         d_loss = gan_rs_set["discriminator_loss"]
         g_loss = gan_rs_set["generator_loss"]
 
-        torch.nn.utils.clip_grad_norm(self.parameters(), max_norm = 0.01)
+        #comment for bce loss
+        #torch.nn.utils.clip_grad_norm(self.parameters(), max_norm = 0.01)
         
         if optimizer_idx == 0:
             self.log("d_loss", d_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
