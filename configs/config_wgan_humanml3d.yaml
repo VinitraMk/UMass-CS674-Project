@@ -30,7 +30,7 @@ TRAIN:
   END_EPOCH: 30
 
   RESUME: '' # Resume training from this path
-  PRETRAINED_VAE: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/checkpoints/best_checkpoint/VAE_HUMAN_ML_epoch=1249.ckpt' # vae model path
+  PRETRAINED_VAE: './checkpoints/best_checkpoint/VAE_HUMAN_ML_epoch=1249.ckpt' # vae model path
   OPTIM:
     TYPE: AdamW # Optimizer type
     LR: 1e-4 # Learning rate
@@ -52,7 +52,7 @@ EVAL:
 # The following are testing settings
 #####################################
 TEST:
-  CHECKPOINTS: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/experiments/wgan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_uncond75_01/checkpoints/epoch=9-v7.ckpt' # Pretrained model path
+  CHECKPOINTS: '/content/UMass-Courses/Semester-2/CS674/UMass-CS674-Project/experiments/wgan/1222_PELearn_Diff_Latent1_MEncDec49_MdiffEnc49_bs64_clip_uncond75_01/checkpoints/epoch=29-v3.ckpt'# Pretrained model path
   DATASETS: ['humanml3d'] # training datasets
   SPLIT: test
   BATCH_SIZE: 1 # training Batch size
@@ -92,6 +92,7 @@ LOSS:
 model:
   vae: true # whether vae model
   model_type: wgan # model type
+  arch_type: basic # architecture type
   condition: 'text'
   latent_dim: [1, 256] # latent dimension
   ff_size: 1024 #

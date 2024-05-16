@@ -34,13 +34,10 @@ class Generator(nn.Module):
     #in_channels = latent_in + text_in
     #self.starting_constant = torch.ones((1, in_channels))
     self.layer1 = nn.Sequential(nn.Linear(in_features=latent_in+text_in, out_features=1024),
-                                nn.LayerNorm(1024),
-                                nn.ReLU())
+                                nn.LeakyReLU())
     self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
-                                nn.LayerNorm(512),
-                                nn.ReLU())
+                                nn.LeakyReLU())
     self.output = nn.Sequential(nn.Linear(in_features=512, out_features=latent_out),
-                                nn.LayerNorm(latent_out),
                                 nn.Tanh()
                                 )
 
@@ -72,14 +69,11 @@ class Discriminator(nn.Module):
     super(Discriminator, self).__init__()
     
     self.layer1 = nn.Sequential(nn.Linear(in_features=latent_out+text_in, out_features=1024),
-                                nn.LayerNorm(1024),
-                                nn.ReLU())
+                                nn.LeakyReLU())
     self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
-                                nn.LayerNorm(512),
-                                nn.ReLU())
+                                nn.LeakyReLU())
     self.layer3 = nn.Sequential(nn.Linear(in_features=512, out_features=256),
-                                nn.LayerNorm(256),
-                                nn.ReLU())
+                                nn.LeakyReLU())
     self.output = nn.Linear(in_features=256, out_features=1)
     self.residual_block = ResidualBlock(256)
 
