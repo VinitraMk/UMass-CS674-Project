@@ -6,7 +6,20 @@ import torch.nn.functional as F
 def wasserstein_loss(real_pred, fake_pred):
     return torch.mean(real_pred - fake_pred)
 
+class ResidualBlock(nn.Module):
+    def __init__(self, hidden_dim):
+        super(ResidualBlock, self).__init__()
+        self.fc1 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.relu = nn.ReLU()
 
+    def forward(self, x):
+        residual = x
+        x = self.relu(self.fc1(x))
+        x = self.fc2(x)
+        x += residual
+        x = self.relu(x)
+        return x
 
 class Generator(nn.Module):
   '''
@@ -21,12 +34,17 @@ class Generator(nn.Module):
     #in_channels = latent_in + text_in
     #self.starting_constant = torch.ones((1, in_channels))
     self.layer1 = nn.Sequential(nn.Linear(in_features=latent_in+text_in, out_features=1024),
-                                nn.LeakyReLU())
+                                nn.LayerNorm(1024),
+                                nn.ReLU())
     self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
-                                nn.LeakyReLU())
+                                nn.LayerNorm(512),
+                                nn.ReLU())
     self.output = nn.Sequential(nn.Linear(in_features=512, out_features=latent_out),
+                                nn.LayerNorm(latent_out),
                                 nn.Tanh()
                                 )
+
+    self.residual_block = ResidualBlock(512)
 
 
   def forward(self, z, text_emb):
@@ -38,6 +56,7 @@ class Generator(nn.Module):
     x = torch.cat([z, text_emb], dim=-1)
     x = self.layer1(x)
     x = self.layer2(x)
+    x = self.residual_block(x)
     x = self.output(x)
     return x
 
@@ -53,12 +72,16 @@ class Discriminator(nn.Module):
     super(Discriminator, self).__init__()
     
     self.layer1 = nn.Sequential(nn.Linear(in_features=latent_out+text_in, out_features=1024),
-                                nn.LeakyReLU())
+                                nn.LayerNorm(1024),
+                                nn.ReLU())
     self.layer2 = nn.Sequential(nn.Linear(in_features=1024, out_features=512),
-                                nn.LeakyReLU())
+                                nn.LayerNorm(512),
+                                nn.ReLU())
     self.layer3 = nn.Sequential(nn.Linear(in_features=512, out_features=256),
-                                nn.LeakyReLU())
+                                nn.LayerNorm(256),
+                                nn.ReLU())
     self.output = nn.Linear(in_features=256, out_features=1)
+    self.residual_block = ResidualBlock(256)
 
   def forward(self, z, text_emb):
     # pass the labels into a embedding layer
@@ -72,6 +95,7 @@ class Discriminator(nn.Module):
     x = self.layer1(x)
     x = self.layer2(x)
     x = self.layer3(x)
+    x = self.residual_block(x)
     x = self.output(x)
     return x
 
@@ -85,7 +109,7 @@ class WGAN(pl.LightningModule):
     self.generator = Generator(latent_in_dim, text_emb_dim, latent_out_dim)
     self.discriminator = Discriminator(latent_in_dim, text_emb_dim, latent_out_dim)
     self.BCE_loss = nn.BCELoss()
-    self.d_steps = 5
+    self.lamda = 10
 
   def forward(self, z, text_emb):
     """
@@ -150,15 +174,15 @@ class WGAN(pl.LightningModule):
 
     #d_loss = (real_loss + fake_loss) / 2
     d_loss = wasserstein_loss(real_pred, fake_pred)
-    d_loss = 10 * self.gradient_penalty(z, z_fake, text_emb)
+    d_loss = self.lamda * self.gradient_penalty(z, z_fake, text_emb)
     #print('dloss', d_loss.shape, d_loss)
     return d_loss
 
     
   def configure_optimizers(self):
 
-    g_optimizer = torch.optim.RMSprop(self.generator.parameters(), lr=0.00001)
-    d_optimizer = torch.optim.RMSprop(self.discriminator.parameters(), lr=0.00001)
+    g_optimizer = torch.optim.RMSprop(self.generator.parameters(), lr=1e-6)
+    d_optimizer = torch.optim.RMSprop(self.discriminator.parameters(), lr=1e-5)
     return [g_optimizer, d_optimizer], []
 
   def gradient_penalty(self, real_pred, fake_pred, text_emb):

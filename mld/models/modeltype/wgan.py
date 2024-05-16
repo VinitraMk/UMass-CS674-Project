@@ -250,7 +250,7 @@ class WGAN(BaseModel):
             motions = batch['motion']
             z, dist_m = self.vae.encode(motions, lengths)
             
-        elif self.stage=="gan":
+        elif self.stage=="wgan":
                         
             text_emb = self.text_encoder(texts)
             
@@ -595,7 +595,7 @@ class WGAN(BaseModel):
         elif optimizer_idx == 1:
             #print('inside disc opt')
             optimizer.step(closure = optimizer_closure)
-            self.clip_gradients(optimizer, gradient_clip_val=0.0001, gradient_clip_algorithm="norm")
+            #self.clip_gradients(optimizer, gradient_clip_val=0.001, gradient_clip_algorithm="norm")
 
     def test_gan_forward(self, batch):
         
