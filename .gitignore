@@ -10,3 +10,7 @@
 /deps
 /**/__pycache__
 *.pyc
+/experiments
+/results
+/motionml_kit
+/datasets
