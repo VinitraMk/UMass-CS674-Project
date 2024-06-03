@@ -47,7 +47,11 @@ class MLDLosses(Metric):
             # KL loss
             losses.append("kl_motion")
 
-        if self.stage not in ['vae', 'diffusion', 'vae_diffusion']:
+        if self.stage in ["gan"]:
+            losses.append("generator_loss")
+            losses.append("discriminator_loss")
+
+        if self.stage not in ['gan', 'vae', 'diffusion', 'vae_diffusion']:
             raise ValueError(f"Stage {self.stage} not supported")
 
         losses.append("total")
@@ -88,6 +92,8 @@ class MLDLosses(Metric):
                 self._losses_func[loss] = torch.nn.SmoothL1Loss(
                     reduction='mean')
                 self._params[loss] = cfg.LOSS.LAMBDA_LATENT
+            elif loss.split('_')[0] == 'generator' or loss.split('_')[0] == 'discriminator':
+                self._params[loss] = nn.BCELoss()
             else:
                 ValueError("This loss is not recognized.")
             if loss.split('_')[-1] == 'joints':
@@ -126,6 +132,11 @@ class MLDLosses(Metric):
                                        rs_set['m_ref'])
             total += self._update_loss("gen_joints", rs_set['gen_joints_rst'],
                                        rs_set['joints_ref'])
+        
+        if self.stage in ["gan"]:
+            # loss
+            total += rs_set["discriminator_loss"]
+            total += rs_set["generator_loss"]
 
         self.total += total.detach()
         self.count += 1

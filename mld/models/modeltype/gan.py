@@ -16,6 +16,8 @@ from mld.models.architectures import (
     t2m_motionenc,
     t2m_textenc,
     vposert_vae,
+    basic_gan,  # Import the GAN
+    style_gan
 )
 from mld.models.losses.mld import MLDLosses
 from mld.models.modeltype.base import BaseModel
@@ -23,10 +25,18 @@ from mld.utils.temos_utils import remove_padding
 
 from .base import BaseModel
 
-class MLD(BaseModel):
+
+import torch.nn as nn
+import torch.nn.parallel
+import torch.optim as optim
+import torch.utils.data
+
+
+
+class GAN(BaseModel):
     """
     Stage 1 vae
-    Stage 2 diffusion
+    Stage 2 diffusion/gan
     """
 
     def __init__(self, cfg, datamodule, **kwargs):
@@ -45,6 +55,10 @@ class MLD(BaseModel):
         self.guidance_scale = cfg.model.guidance_scale
         self.guidance_uncodp = cfg.model.guidance_uncondp
         self.datamodule = datamodule
+        self.noise_dim = 100
+        self.text_emb_dim = 768
+                
+        print(self.latent_dim)
 
         try:
             self.vae_type = cfg.model.vae_type
@@ -58,7 +72,10 @@ class MLD(BaseModel):
             self.vae = instantiate_from_config(cfg.model.motion_vae)
 
         # Don't train the motion encoder and decoder
-        if self.stage == "diffusion":
+        if self.stage == "gan":
+            #self.gan = basic_gan.CGAN(self.noise_dim, self.text_emb_dim , self.latent_dim[-1])  # text emb dim = 768
+            self.gan = style_gan.CGAN(self.noise_dim, self.text_emb_dim , self.latent_dim[-1])  # text emb dim = 768
+            
             if self.vae_type in ["mld", "vposert","actor"]:
                 self.vae.training = False
                 for p in self.vae.parameters():
@@ -91,7 +108,7 @@ class MLD(BaseModel):
             raise NotImplementedError(
                 "Do not support other optimizer for now.")
 
-        if cfg.LOSS.TYPE == "mld":
+        if cfg.LOSS.TYPE == "mld":   # change this
             self._losses = MetricCollection({
                 split: MLDLosses(vae=self.is_vae, mode="xyz", cfg=cfg)
                 for split in ["losses_train", "losses_test", "losses_val"]
@@ -169,7 +186,7 @@ class MLD(BaseModel):
         dataname = "t2m" if dataname == "humanml3d" else dataname
         t2m_checkpoint = torch.load(
             os.path.join(cfg.model.t2m_path, dataname,
-                         "text_mot_match/model/finest.tar"), map_location = torch.device("cuda"))
+                         "text_mot_match/model/finest.tar"), map_location='cuda:0')   # text and motion encoder path
         self.t2m_textencoder.load_state_dict(t2m_checkpoint["text_encoder"])
         self.t2m_moveencoder.load_state_dict(
             t2m_checkpoint["movement_encoder"])
@@ -187,30 +204,30 @@ class MLD(BaseModel):
         for p in self.t2m_motionencoder.parameters():
             p.requires_grad = False
 
-    def sample_from_distribution(
-        self,
-        dist,
-        *,
-        fact=None,
-        sample_mean=False,
-    ) -> Tensor:
-        fact = fact if fact is not None else self.fact
-        sample_mean = sample_mean if sample_mean is not None else self.sample_mean
+    # def sample_from_distribution(
+    #     self,
+    #     dist,
+    #     *,
+    #     fact=None,
+    #     sample_mean=False,
+    # ) -> Tensor:
+    #     fact = fact if fact is not None else self.fact
+    #     sample_mean = sample_mean if sample_mean is not None else self.sample_mean
 
-        if sample_mean:
-            return dist.loc.unsqueeze(0)
+    #     if sample_mean:
+    #         return dist.loc.unsqueeze(0)
 
-        # Reparameterization trick
-        if fact is None:
-            return dist.rsample().unsqueeze(0)
+    #     # Reparameterization trick
+    #     if fact is None:
+    #         return dist.rsample().unsqueeze(0)
 
-        # Resclale the eps
-        eps = dist.rsample() - dist.loc
-        z = dist.loc + fact * eps
+    #     # Resclale the eps
+    #     eps = dist.rsample() - dist.loc
+    #     z = dist.loc + fact * eps
 
-        # add latent size
-        z = z.unsqueeze(0)
-        return z
+    #     # add latent size
+    #     z = z.unsqueeze(0)
+    #     return z
 
     def forward(self, batch):
         texts = batch["text"]
@@ -232,6 +249,16 @@ class MLD(BaseModel):
         elif self.stage in ['vae']:
             motions = batch['motion']
             z, dist_m = self.vae.encode(motions, lengths)
+            
+        elif self.stage=="gan":
+                        
+            text_emb = self.text_encoder(texts)
+            
+            noise = torch.randn((len(texts), self.noise_dim), device=text_emb.device, dtype=torch.float)
+            
+            
+            z = self.gan(noise, text_emb).unsqueeze(0)
+            
 
         with torch.no_grad():
             # ToDo change mcross actor to same api
@@ -263,28 +290,29 @@ class MLD(BaseModel):
         joints = self.feats2joints(feats_rst.detach().cpu())
         return remove_padding(joints, lengths)
 
-    def gen_from_latent(self, batch):
-        z = batch["latent"]
-        lengths = batch["length"]
+    # def gen_from_latent(self, batch):
+    #     z = batch["latent"]
+    #     lengths = batch["length"]
 
-        feats_rst = self.vae.decode(z, lengths)
+    #     feats_rst = self.vae.decode(z, lengths)
 
-        # feats => joints
-        joints = self.feats2joints(feats_rst.detach().cpu())
-        return remove_padding(joints, lengths)
+    #     # feats => joints
+    #     joints = self.feats2joints(feats_rst.detach().cpu())
+    #     return remove_padding(joints, lengths)
 
-    def recon_from_motion(self, batch):
-        feats_ref = batch["motion"]
-        length = batch["length"]
 
-        z, dist = self.vae.encode(feats_ref, length)
-        feats_rst = self.vae.decode(z, length)
+    # def recon_from_motion(self, batch):
+    #     feats_ref = batch["motion"]
+    #     length = batch["length"]
 
-        # feats => joints
-        joints = self.feats2joints(feats_rst.detach().cpu())
-        joints_ref = self.feats2joints(feats_ref.detach().cpu())
-        return remove_padding(joints,
-                              length), remove_padding(joints_ref, length)
+    #     z, dist = self.vae.encode(feats_ref, length)
+    #     feats_rst = self.vae.decode(z, length)
+
+    #     # feats => joints
+    #     joints = self.feats2joints(feats_rst.detach().cpu())
+    #     joints_ref = self.feats2joints(feats_ref.detach().cpu())
+    #     return remove_padding(joints,
+    #                           length), remove_padding(joints_ref, length)
 
     def _diffusion_reverse(self, encoder_hidden_states, lengths=None):
         # init latents
@@ -358,69 +386,69 @@ class MLD(BaseModel):
         latents = latents.permute(1, 0, 2)
         return latents
     
-    def _diffusion_reverse_tsne(self, encoder_hidden_states, lengths=None):
-        # init latents
-        bsz = encoder_hidden_states.shape[0]
-        if self.do_classifier_free_guidance:
-            bsz = bsz // 2
-        if self.vae_type == "no":
-            assert lengths is not None, "no vae (diffusion only) need lengths for diffusion"
-            latents = torch.randn(
-                (bsz, max(lengths), self.cfg.DATASET.NFEATS),
-                device=encoder_hidden_states.device,
-                dtype=torch.float,
-            )
-        else:
-            latents = torch.randn(
-                (bsz, self.latent_dim[0], self.latent_dim[-1]),
-                device=encoder_hidden_states.device,
-                dtype=torch.float,
-            )
+    # def _diffusion_reverse_tsne(self, encoder_hidden_states, lengths=None):
+    #     # init latents
+    #     bsz = encoder_hidden_states.shape[0]
+    #     if self.do_classifier_free_guidance:
+    #         bsz = bsz // 2
+    #     if self.vae_type == "no":
+    #         assert lengths is not None, "no vae (diffusion only) need lengths for diffusion"
+    #         latents = torch.randn(
+    #             (bsz, max(lengths), self.cfg.DATASET.NFEATS),
+    #             device=encoder_hidden_states.device,
+    #             dtype=torch.float,
+    #         )
+    #     else:
+    #         latents = torch.randn(
+    #             (bsz, self.latent_dim[0], self.latent_dim[-1]),
+    #             device=encoder_hidden_states.device,
+    #             dtype=torch.float,
+    #         )
 
-        # scale the initial noise by the standard deviation required by the scheduler
-        latents = latents * self.scheduler.init_noise_sigma
-        # set timesteps
-        self.scheduler.set_timesteps(
-            self.cfg.model.scheduler.num_inference_timesteps)
-        timesteps = self.scheduler.timesteps.to(encoder_hidden_states.device)
-        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
-        # eta (η) is only used with the DDIMScheduler, and between [0, 1]
-        extra_step_kwargs = {}
-        if "eta" in set(
-                inspect.signature(self.scheduler.step).parameters.keys()):
-            extra_step_kwargs["eta"] = self.cfg.model.scheduler.eta
+    #     # scale the initial noise by the standard deviation required by the scheduler
+    #     latents = latents * self.scheduler.init_noise_sigma
+    #     # set timesteps
+    #     self.scheduler.set_timesteps(
+    #         self.cfg.model.scheduler.num_inference_timesteps)
+    #     timesteps = self.scheduler.timesteps.to(encoder_hidden_states.device)
+    #     # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+    #     # eta (η) is only used with the DDIMScheduler, and between [0, 1]
+    #     extra_step_kwargs = {}
+    #     if "eta" in set(
+    #             inspect.signature(self.scheduler.step).parameters.keys()):
+    #         extra_step_kwargs["eta"] = self.cfg.model.scheduler.eta
 
-        # reverse
-        latents_t = []
-        for i, t in enumerate(timesteps):
-            # expand the latents if we are doing classifier free guidance
-            latent_model_input = (torch.cat(
-                [latents] *
-                2) if self.do_classifier_free_guidance else latents)
-            lengths_reverse = (lengths * 2 if self.do_classifier_free_guidance
-                               else lengths)
-            # latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
-            # predict the noise residual
-            noise_pred = self.denoiser(
-                sample=latent_model_input,
-                timestep=t,
-                encoder_hidden_states=encoder_hidden_states,
-                lengths=lengths_reverse,
-            )[0]
-            # perform guidance
-            if self.do_classifier_free_guidance:
-                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                noise_pred = noise_pred_uncond + self.guidance_scale * (
-                    noise_pred_text - noise_pred_uncond)
-                # text_embeddings_for_guidance = encoder_hidden_states.chunk(
-                #     2)[1] if self.do_classifier_free_guidance else encoder_hidden_states
-            latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
-            # [batch_size, 1, latent_dim] -> [1, batch_size, latent_dim]
-            latents_t.append(latents.permute(1,0,2))
-        # [1, batch_size, latent_dim] -> [t, batch_size, latent_dim]
-        latents_t = torch.cat(latents_t)
-        return latents_t
+    #     # reverse
+    #     latents_t = []
+    #     for i, t in enumerate(timesteps):
+    #         # expand the latents if we are doing classifier free guidance
+    #         latent_model_input = (torch.cat(
+    #             [latents] *
+    #             2) if self.do_classifier_free_guidance else latents)
+    #         lengths_reverse = (lengths * 2 if self.do_classifier_free_guidance
+    #                            else lengths)
+    #         # latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+    #         # predict the noise residual
+    #         noise_pred = self.denoiser(
+    #             sample=latent_model_input,
+    #             timestep=t,
+    #             encoder_hidden_states=encoder_hidden_states,
+    #             lengths=lengths_reverse,
+    #         )[0]
+    #         # perform guidance
+    #         if self.do_classifier_free_guidance:
+    #             noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+    #             noise_pred = noise_pred_uncond + self.guidance_scale * (
+    #                 noise_pred_text - noise_pred_uncond)
+    #             # text_embeddings_for_guidance = encoder_hidden_states.chunk(
+    #             #     2)[1] if self.do_classifier_free_guidance else encoder_hidden_states
+    #         latents = self.scheduler.step(noise_pred, t, latents,
+    #                                           **extra_step_kwargs).prev_sample
+    #         # [batch_size, 1, latent_dim] -> [1, batch_size, latent_dim]
+    #         latents_t.append(latents.permute(1,0,2))
+    #     # [1, batch_size, latent_dim] -> [t, batch_size, latent_dim]
+    #     latents_t = torch.cat(latents_t)
+    #     return latents_t
 
     def _diffusion_process(self, latents, encoder_hidden_states, lengths=None):
         """
@@ -518,6 +546,143 @@ class MLD(BaseModel):
         }
         return rs_set
 
+    def train_gan_forward(self, batch):
+        
+        motions = batch['motion']
+        texts = batch["text"]
+        lengths = batch["length"]
+        
+        
+        
+        # Encode the real motion data using the VAE encoder
+        with torch.no_grad():
+            if self.vae_type in ["mld", "vposert", "actor"]:
+                real_latent, _ = self.vae.encode(motions, lengths)
+            elif self.vae_type == "no":
+                real_latent = motions.permute(1, 0, 2)
+            else:
+                raise TypeError("vae_type must be mld, vposert, actor, or no")
+
+
+        # Sample Gaussian noise
+        
+        # Get text embeddings
+        cond_emb = self.text_encoder(texts)
+        
+        noise = torch.randn((len(texts), self.noise_dim), device=cond_emb.device, dtype=torch.float)
+                
+        
+        
+        # Generate fake latent space using the generator
+        fake_latent = self.gan(noise, cond_emb)
+        
+        # Train the GAN
+        #print('real lt, fake lt', real_latent.shape, fake_latent.shape, noise.shape, cond_emb.shape)
+        generator_loss = self.gan.generator_step(noise, cond_emb)
+        discriminator_loss = self.gan.discriminator_step(fake_latent, real_latent, cond_emb)
+         
+        return {
+                "real_latent": real_latent,
+                "fake_latent": fake_latent,
+                "discriminator_loss": discriminator_loss,
+                "generator_loss": generator_loss,
+            }
+                
+                
+    def test_gan_forward(self, batch):
+        
+        motions = batch['motion']
+        texts = batch["text"]
+        lengths = batch["length"]
+                
+                
+        # Sample Gaussian noise
+        
+        cond_emb = self.text_encoder(texts)
+        
+        noise = torch.randn((len(texts), self.noise_dim), device=cond_emb.device, dtype=torch.float)
+        
+       
+
+        
+        fake_latent = self.gan(noise, cond_emb).unsqueeze(0)
+
+
+        with torch.no_grad():
+                if self.vae_type in ["mld", "vposert", "actor"]:
+                    feats_rst = self.vae.decode(fake_latent, lengths)
+                elif self.vae_type == "no":
+                    feats_rst = fake_latent.permute(1, 0, 2)
+                else:
+                    raise TypeError("vae_type must be mld, vposert, actor, or no")
+            
+
+        # feats => joints
+        joints_rst = self.feats2joints(feats_rst.detach().cpu())
+        # return remove_padding(joints, lengths)
+    
+        return {
+        "fake_latent": fake_latent,
+        "feats_rst": feats_rst,
+        "joints_rst": joints_rst,
+        }
+    
+
+    def training_step(self, batch, batch_idx, optimizer_idx):
+        gan_rs_set = self.train_gan_forward(batch)
+        d_loss = gan_rs_set["discriminator_loss"]
+        g_loss = gan_rs_set["generator_loss"]
+        
+        if optimizer_idx == 0:
+            self.log("d_loss", d_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+            return g_loss
+        
+        if optimizer_idx == 1:
+            self.log("g_loss", g_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+            return d_loss
+        
+        # optimizer_g, optimizer_d = self.optimizers()
+        
+        # self.toggle_optimizer(optimizer_g)
+        # self.manual_backward(g_loss)
+        # optimizer_g.step()
+        # optimizer_g.zero_grad()
+        # self.untoggle_optimizer(optimizer_g)
+
+        
+        
+        # self.toggle_optimizer(optimizer_d)
+        # self.manual_backward(d_loss)
+        # optimizer_d.step()
+        # optimizer_d.zero_grad()
+        # self.untoggle_optimizer(optimizer_d)
+
+        
+        # return {"loss": d_loss + g_loss}
+
+    # def validation_step(self, batch, batch_idx):
+    #     gan_rs_set = self.test_gan_forward(batch)
+    #     joints_rst = gan_rs_set["joints_rst"]
+    #     joints_ref = self.feats2joints(batch["motion"].detach().cpu())
+    #     self.MRMetrics.update(joints_rst, joints_ref, batch["length"])
+
+    # def validation_epoch_end(self, outputs):
+    #     metrics_dict = self.MRMetrics.compute()
+    #     self.MRMetrics.reset()
+    #     self.log_dict(metrics_dict, sync_dist=True)
+
+    # def test_step(self, batch, batch_idx):
+    #     gan_rs_set = self.test_gan_forward(batch)
+    #     joints_rst = gan_rs_set["joints_rst"]
+    #     return joints_rst, batch["length"]
+
+    # def test_epoch_end(self, outputs):
+    #     self.save_npy(outputs)
+
+    def configure_optimizers(self):
+        return self.gan.configure_optimizers()
+        
+    
     def train_diffusion_forward(self, batch):
         feats_ref = batch["motion"]
         lengths = batch["length"]
@@ -656,9 +821,19 @@ class MLD(BaseModel):
             if self.condition in ['text_uncond']:
                 # uncond random sample
                 z = torch.randn_like(z)
+            
+        elif self.stage == "gan":
+            text_emb = self.text_encoder(texts)
+            noise = torch.randn((len(lengths), self.noise_dim), device=text_emb.device, dtype=torch.float)
+            
+            
+            
+            z = self.gan(noise, text_emb).unsqueeze(0)
+                    
 
         with torch.no_grad():
             if self.vae_type in ["mld", "vposert", "actor"]:
+                #print('vae decode', z.shape, len(lengths))
                 feats_rst = self.vae.decode(z, lengths)
             elif self.vae_type == "no":
                 feats_rst = z.permute(1, 0, 2)
@@ -706,106 +881,106 @@ class MLD(BaseModel):
         }
         return rs_set
 
-    def a2m_eval(self, batch):
-        actions = batch["action"]
-        actiontexts = batch["action_text"]
-        motions = batch["motion"].detach().clone()
-        lengths = batch["length"]
+    # def a2m_eval(self, batch):
+    #     actions = batch["action"]
+    #     actiontexts = batch["action_text"]
+    #     motions = batch["motion"].detach().clone()
+    #     lengths = batch["length"]
 
-        if self.do_classifier_free_guidance:
-            cond_emb = torch.cat((torch.zeros_like(actions), actions))
+    #     if self.do_classifier_free_guidance:
+    #         cond_emb = torch.cat((torch.zeros_like(actions), actions))
 
-        if self.stage in ['diffusion', 'vae_diffusion']:
-            z = self._diffusion_reverse(cond_emb, lengths)
-        elif self.stage in ['vae']:
-            if self.vae_type in ["mld", "vposert","actor"]:
-                z, dist_m = self.vae.encode(motions, lengths)
-            else:
-                raise TypeError("vae_type must be mcross or actor")
+    #     if self.stage in ['diffusion', 'vae_diffusion']:
+    #         z = self._diffusion_reverse(cond_emb, lengths)
+    #     elif self.stage in ['vae']:
+    #         if self.vae_type in ["mld", "vposert","actor"]:
+    #             z, dist_m = self.vae.encode(motions, lengths)
+    #         else:
+    #             raise TypeError("vae_type must be mcross or actor")
 
-        with torch.no_grad():
-            if self.vae_type in ["mld", "vposert","actor"]:
-                feats_rst = self.vae.decode(z, lengths)
-            elif self.vae_type == "no":
-                feats_rst = z.permute(1, 0, 2)
-            else:
-                raise TypeError("vae_type must be mcross or actor or mld")
+    #     with torch.no_grad():
+    #         if self.vae_type in ["mld", "vposert","actor"]:
+    #             feats_rst = self.vae.decode(z, lengths)
+    #         elif self.vae_type == "no":
+    #             feats_rst = z.permute(1, 0, 2)
+    #         else:
+    #             raise TypeError("vae_type must be mcross or actor or mld")
 
-        mask = batch["mask"]
-        joints_rst = self.feats2joints(feats_rst, mask)
-        joints_ref = self.feats2joints(motions, mask)
-        joints_eval_rst = self.feats2joints_eval(feats_rst, mask)
-        joints_eval_ref = self.feats2joints_eval(motions, mask)
+    #     mask = batch["mask"]
+    #     joints_rst = self.feats2joints(feats_rst, mask)
+    #     joints_ref = self.feats2joints(motions, mask)
+    #     joints_eval_rst = self.feats2joints_eval(feats_rst, mask)
+    #     joints_eval_ref = self.feats2joints_eval(motions, mask)
 
-        rs_set = {
-            "m_action": actions,
-            "m_ref": motions,
-            "m_rst": feats_rst,
-            "m_lens": lengths,
-            "joints_rst": joints_rst,
-            "joints_ref": joints_ref,
-            "joints_eval_rst": joints_eval_rst,
-            "joints_eval_ref": joints_eval_ref,
-        }
-        return rs_set
+    #     rs_set = {
+    #         "m_action": actions,
+    #         "m_ref": motions,
+    #         "m_rst": feats_rst,
+    #         "m_lens": lengths,
+    #         "joints_rst": joints_rst,
+    #         "joints_ref": joints_ref,
+    #         "joints_eval_rst": joints_eval_rst,
+    #         "joints_eval_ref": joints_eval_ref,
+    #     }
+    #     return rs_set
 
-    def a2m_gt(self, batch):
-        actions = batch["action"]
-        actiontexts = batch["action_text"]
-        motions = batch["motion"].detach().clone()
-        lengths = batch["length"]
-        mask = batch["mask"]
+    # def a2m_gt(self, batch):
+    #     actions = batch["action"]
+    #     actiontexts = batch["action_text"]
+    #     motions = batch["motion"].detach().clone()
+    #     lengths = batch["length"]
+    #     mask = batch["mask"]
 
-        joints_ref = self.feats2joints(motions.to('cuda'), mask.to('cuda'))
+    #     joints_ref = self.feats2joints(motions.to('cuda'), mask.to('cuda'))
 
-        rs_set = {
-            "m_action": actions,
-            "m_text": actiontexts,
-            "m_ref": motions,
-            "m_lens": lengths,
-            "joints_ref": joints_ref,
-        }
-        return rs_set
+    #     rs_set = {
+    #         "m_action": actions,
+    #         "m_text": actiontexts,
+    #         "m_ref": motions,
+    #         "m_lens": lengths,
+    #         "joints_ref": joints_ref,
+    #     }
+    #     return rs_set
 
-    def eval_gt(self, batch, renoem=True):
-        motions = batch["motion"].detach().clone()
-        lengths = batch["length"]
+    # def eval_gt(self, batch, renoem=True):
+    #     motions = batch["motion"].detach().clone()
+    #     lengths = batch["length"]
 
-        # feats_rst = self.datamodule.renorm4t2m(feats_rst)
-        if renoem:
-            motions = self.datamodule.renorm4t2m(motions)
+    #     # feats_rst = self.datamodule.renorm4t2m(feats_rst)
+    #     if renoem:
+    #         motions = self.datamodule.renorm4t2m(motions)
 
-        # t2m motion encoder
-        m_lens = lengths.copy()
-        m_lens = torch.tensor(m_lens, device=motions.device)
-        align_idx = np.argsort(m_lens.data.tolist())[::-1].copy()
-        motions = motions[align_idx]
-        m_lens = m_lens[align_idx]
-        m_lens = torch.div(m_lens,
-                           self.cfg.DATASET.HUMANML3D.UNIT_LEN,
-                           rounding_mode="floor")
+    #     # t2m motion encoder
+    #     m_lens = lengths.copy()
+    #     m_lens = torch.tensor(m_lens, device=motions.device)
+    #     align_idx = np.argsort(m_lens.data.tolist())[::-1].copy()
+    #     motions = motions[align_idx]
+    #     m_lens = m_lens[align_idx]
+    #     m_lens = torch.div(m_lens,
+    #                        self.cfg.DATASET.HUMANML3D.UNIT_LEN,
+    #                        rounding_mode="floor")
 
-        word_embs = batch["word_embs"].detach()
-        pos_ohot = batch["pos_ohot"].detach()
-        text_lengths = batch["text_len"].detach()
+    #     word_embs = batch["word_embs"].detach()
+    #     pos_ohot = batch["pos_ohot"].detach()
+    #     text_lengths = batch["text_len"].detach()
 
-        motion_mov = self.t2m_moveencoder(motions[..., :-4]).detach()
-        motion_emb = self.t2m_motionencoder(motion_mov, m_lens)
+    #     motion_mov = self.t2m_moveencoder(motions[..., :-4]).detach()
+    #     motion_emb = self.t2m_motionencoder(motion_mov, m_lens)
 
-        # t2m text encoder
-        text_emb = self.t2m_textencoder(word_embs, pos_ohot,
-                                        text_lengths)[align_idx]
+    #     # t2m text encoder
+    #     text_emb = self.t2m_textencoder(word_embs, pos_ohot,
+    #                                     text_lengths)[align_idx]
 
-        # joints recover
-        joints_ref = self.feats2joints(motions)
+    #     # joints recover
+    #     joints_ref = self.feats2joints(motions)
 
-        rs_set = {
-            "m_ref": motions,
-            "lat_t": text_emb,
-            "lat_m": motion_emb,
-            "joints_ref": joints_ref,
-        }
-        return rs_set
+    #     rs_set = {
+    #         "m_ref": motions,
+    #         "lat_t": text_emb,
+    #         "lat_m": motion_emb,
+    #         "joints_ref": joints_ref,
+    #     }
+    #     return rs_set
 
     def allsplit_step(self, split: str, batch, batch_idx):
         if split in ["train", "val"]:
@@ -827,6 +1002,20 @@ class MLD(BaseModel):
                     "gen_joints_rst": t2m_rs_set["joints_rst"],
                     "lat_t": t2m_rs_set["lat_t"],
                 }
+                
+            elif self.stage=="gan":
+                rs_set = self.train_gan_forward(batch)
+                
+                # d_loss = gan_rs_set["discriminator_loss"]
+                # g_loss = gan_rs_set["generator_loss"]
+                # self.log(f"{split}/d_loss", d_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+                # self.log(f"{split}/g_loss", g_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+                # return {"loss": d_loss + g_loss}
+
+                # t2m_rs_set = self.test_gan_forward(batch)
+                
+                
+                
             else:
                 raise ValueError(f"Not support this stage {self.stage}!")
 
@@ -909,3 +1098,5 @@ class MLD(BaseModel):
         if split in ["test"]:
             return rs_set["joints_rst"], batch["length"]
         return loss
+
+

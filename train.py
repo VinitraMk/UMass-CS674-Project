@@ -8,11 +8,11 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 # from pytorch_lightning.strategies.ddp import DDPStrategy
 
-from helpers.callback import ProgressLogger
-from helpers.config import parse_args
-from helpers.data.get_data import get_datasets
-from models.get_model import get_model
-from helpers.utils.logger import create_logger
+from mld.callback import ProgressLogger
+from mld.config import parse_args
+from mld.data.get_data import get_datasets
+from mld.models.get_model import get_model
+from mld.utils.logger import create_logger
 
 
 def main():
@@ -117,6 +117,7 @@ def main():
     }
 
     # callbacks
+    print('====>', cfg.FOLDER_EXP)
     callbacks = [
         pl.callbacks.RichProgressBar(),
         ProgressLogger(metric_monitor=metric_monitor),
@@ -133,10 +134,11 @@ def main():
         ),
     ]
     logger.info("Callbacks initialized")
-
+    gpu_count = 1
     if len(cfg.DEVICE) > 1:
         # ddp_strategy = DDPStrategy(find_unused_parameters=False)
         ddp_strategy = "ddp"
+        gpu_count = len(cfg.DEVICE)
     else:
         ddp_strategy = None
 

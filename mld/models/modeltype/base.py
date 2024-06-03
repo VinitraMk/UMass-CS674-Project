@@ -193,7 +193,7 @@ class BaseModel(LightningModule):
         if cfg.TEST.SAVE_PREDICTIONS:
             lengths = [i[1] for i in outputs]
             outputs = [i[0] for i in outputs]
-            if cfg.TEST.DATASETS[0].lower() in ["humanml3d", "kit"]:
+            if cfg.TEST.DATASETS[0].lower() in ["kit"]:
                 keyids = self.trainer.datamodule.test_dataset.name_list
                 for i in range(len(outputs)):
                     for bid in range(
