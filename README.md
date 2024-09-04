@@ -26,19 +26,6 @@ This work explores the use of latent space in motion synthesis to enhance the pe
 
 Following motion previews are from our best model which generates a motion given a text prompt.
 
-<div>
-  <div style="text-align: center; display: inline-block; margin: 0 20px;">
-    <img src="./demo/data/readme_assets/example_0.gif" alt="Image 1" style="width: 200px;"/>
-    <p style="font-size:10px;">a man kicks something with his left leg</p>
-  </div>
-
-  <div style="text-align: center; display: inline-block; margin: 0 20px;">
-    <img src="./demo/data/readme_assets/example_1.gif" alt="Image 2" style="width: 200px;"/>
-    <p style="font-size:10px;">a person is skipping rope</p>
-  </div>
-
-  <div style="text-align: center; display: inline-block; margin: 0 20px;">
-    <img src="./demo/data/readme_assets/example_2.gif" alt="Image 3" style="width: 200px;"/>
-    <p style="font-size:10px;">a person walks backward slowly</p>
-  </div>
-</div>
+| ![Caption 1](./demo/data/readme_assets/example_0.gif) | ![Caption 2](./demo/data/readme_assets/example_1.gif) | ![Caption 3](./demo/data/readme_assets/example_2.gif) |
+|:-------------------------:|:-------------------------:|:-------------------------:|
+| a man kicks something with his left leg  | a person is skipping rope | a person walks backward slowly |
