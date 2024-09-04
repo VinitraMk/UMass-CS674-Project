@@ -12,3 +12,5 @@
 *.pyc
 /experiments
 /results
+/motionml_kit
+/datasets

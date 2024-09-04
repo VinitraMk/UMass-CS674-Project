@@ -579,7 +579,7 @@ class GAN(BaseModel):
         # Train the GAN
         #print('real lt, fake lt', real_latent.shape, fake_latent.shape, noise.shape, cond_emb.shape)
         generator_loss = self.gan.generator_step(noise, cond_emb)
-        discriminator_loss = self.gan.discriminator_step(fake_latent, noise, cond_emb)
+        discriminator_loss = self.gan.discriminator_step(fake_latent, real_latent, cond_emb)
          
         return {
                 "real_latent": real_latent,

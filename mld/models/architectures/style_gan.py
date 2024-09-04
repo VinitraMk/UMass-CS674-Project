@@ -174,11 +174,12 @@ class Discriminator(nn.Module):
   with the predicted class probabilities (generated or real data)
   '''
 
-  def __init__(self, in_channels = 256):
+  def __init__(self, text_in = 768, in_channels = 256):
     super(Discriminator, self).__init__()
     
     self.prog_blocks, self.xyz_layers = nn.ModuleList([]), nn.ModuleList([])
     self.leaky = nn.LeakyReLU(0.2)
+    self.init_lin = nn.Linear(in_channels + text_in, in_channels)
     for i in range(len(factors) - 1):
         conv_in = int(in_channels * factors[i])
         conv_out = int(in_channels * factors[i + 1])
@@ -187,14 +188,16 @@ class Discriminator(nn.Module):
 
     self.sigmoid = nn.Sigmoid()
 
-  def forward(self, x, text_emb, alpha = 1.0, steps = 4):
+  def forward(self, z, text_emb, steps = 4):
     # pass the labels into a embedding layer
     # labels_embedding = self.embedding(y)
     # concat the embedded labels and the input tensor
     # x is a tensor of size (batch_size, 794)
     #print('disc inp shape', x.shape, len(self.prog_blocks), steps)
     cur_step = len(self.prog_blocks) - steps
-    out = x
+    #print('disc', z.shape, text_emb.shape)
+    x = torch.cat([z, torch.squeeze(text_emb, 1)], dim=-1)
+    out = self.init_lin(x)
     for step in range(cur_step, len(self.prog_blocks)):
         out = self.prog_blocks[step](out)
     out = self.sigmoid(out)
@@ -263,17 +266,13 @@ class CGAN(pl.LightningModule):
     #print('after reshape real shape', x.shape)
     #real_pred = torch.squeeze(self.discriminator(x, 1.0, 6))
     fake_pred = self.discriminator(z_fake, text_emb)
-    fake_loss = self.BCE_loss(fake_pred, torch.ones_like(fake_pred))
+    fake_loss = self.BCE_loss(fake_pred, torch.zeros_like(fake_pred))
 
     #print('real latent b4 self', z.shape, text_emb.shape)
     if len(z.size()) > 2:
         z = z.squeeze()
-    real_latent_pred = self(z, text_emb).detach() 
-    #print('generated latent', real_latent_pred.shape)
-    #fake_pred = torch.squeeze(self.discriminator(fake_latent, 1.0, 6))
-    real_pred = self.discriminator(real_latent_pred, text_emb)
-    #print('fake pred', real_pred.shape)
-    real_loss = self.BCE_loss(real_pred, torch.zeros_like(real_pred))
+    real_pred = self.discriminator(z, text_emb)
+    real_loss = self.BCE_loss(real_pred, torch.ones_like(real_pred))
 
 
     d_loss = (real_loss + fake_loss) / 2
@@ -282,8 +281,8 @@ class CGAN(pl.LightningModule):
 
     
   def configure_optimizers(self):
-    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.0001)
-    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.0001)
+    g_optimizer = torch.optim.Adam(self.generator.parameters(), lr=0.0003)
+    d_optimizer = torch.optim.Adam(self.discriminator.parameters(), lr=0.0003)
     return [g_optimizer, d_optimizer], []
 
 
