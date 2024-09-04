@@ -26,6 +26,7 @@ This work explores the use of latent space in motion synthesis to enhance the pe
 
 Following previews are from the model that gave us the best qualitative output in terms of aesthetic and correctness of motion.
 
-**Prompt: a man kicks with something or someone with his left leg**
 
-![example](./demo/data/readme_assets/example_0.gif)
+
+![example_1](./demo/data/readme_assets/example_0.gif) ![example_2](./demo/data/readme_assets/example_1.gif)
+**Prompt: a man kicks something or someone with his left leg** **Prompt: A person is skipping rope.**
