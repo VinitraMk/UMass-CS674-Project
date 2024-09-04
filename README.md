@@ -29,16 +29,16 @@ Following motion previews are from our best model which generates a motion given
 <div style="display: flex; justify-content: space-between;">
   <div style="text-align: center;">
     <img src="./demo/data/readme_assets/example_0.gif" alt="Image 1" style="width: 200px;"/>
-    <p style="font-size:10px;">a man kicks something with his left leg</p>
+    <p style="font-size:10px; display: inline;">a man kicks something with his left leg</p>
   </div>
 
   <div style="text-align: center;">
     <img src="./demo/data/readme_assets/example_1.gif" alt="Image 2" style="width: 200px;"/>
-    <p style="font-size:10px;">a person is skipping rope</p>
+    <p style="font-size:10px; display: inline;">a person is skipping rope</p>
   </div>
 
   <div style="text-align: center;">
     <img src="./demo/data/readme_assets/example_2.gif" alt="Image 3" style="width: 200px;"/>
-    <p style="font-size:10px;">a person walks backward slowly</p>
+    <p style="font-size:10px; display: inline;">a person walks backward slowly</p>
   </div>
 </div>
