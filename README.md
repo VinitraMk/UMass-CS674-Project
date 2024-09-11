@@ -29,3 +29,7 @@ Following motion previews are from our best model which generates a motion given
 | ![Caption 1](./demo/data/readme_assets/example_0.gif) | ![Caption 2](./demo/data/readme_assets/example_1.gif) | ![Caption 3](./demo/data/readme_assets/example_2.gif) |
 |:-------------------------:|:-------------------------:|:-------------------------:|
 | a man kicks something with his left leg  | a person is skipping rope | a person walks backward slowly |
+
+## Report
+
+[Read our Mock paper](./demo/data/readme_assets/final-paper.pdf)
